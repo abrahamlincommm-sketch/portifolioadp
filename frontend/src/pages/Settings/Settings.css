@@ -1,0 +1,130 @@
+.settings-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.settings-layout {
+  display: grid;
+  grid-template-columns: 250px 1fr;
+  gap: 24px;
+}
+
+.settings-sidebar {
+  padding: 12px !important;
+  height: fit-content;
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings-tab {
+  background: transparent;
+  border: none;
+  text-align: left;
+  padding: 12px 16px;
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.settings-tab:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+}
+
+.settings-tab.active {
+  background: rgba(124, 58, 237, 0.15);
+  color: var(--accent-primary);
+}
+
+.settings-content {
+  min-width: 0;
+}
+
+.tab-pane h3 {
+  margin: 0 0 8px 0;
+  font-size: 1.25rem;
+}
+
+.mb-4 { margin-bottom: 24px; }
+.mt-4 { margin-top: 24px; }
+.mb-2 { margin-bottom: 12px; }
+
+.connections-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;
+}
+
+.connection-card {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.conn-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.conn-brand {
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.conn-brand.aliexpress { color: #ff4747; }
+.conn-brand.ml { color: #f59e0b; }
+.conn-brand.shopee { color: #f43f5e; }
+
+.conn-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+
+.conn-status .dot { width: 6px; height: 6px; border-radius: 50%; }
+
+.conn-status.connected { background: rgba(16, 185, 129, 0.1); color: var(--accent-emerald); }
+.conn-status.connected .dot { background: var(--accent-emerald); box-shadow: 0 0 5px var(--accent-emerald); }
+
+.conn-status.disconnected { background: rgba(144, 144, 168, 0.1); color: var(--text-secondary); }
+.conn-status.disconnected .dot { background: var(--text-secondary); }
+
+.conn-desc {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin: 0;
+  min-height: 40px;
+}
+
+.conn-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+
+.last-sync {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+}

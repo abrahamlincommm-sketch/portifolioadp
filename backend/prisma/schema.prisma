@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String       @id @default(uuid())
+  email       String       @unique
+  password    String
+  name        String
+  credentials Credential[]
+  products    Product[]
+  orders      Order[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Credential {
+  id           String    @id @default(uuid())
+  platform     String    // ALIEXPRESS | MERCADOLIVRE | SHOPEE
+  accessToken  String?
+  refreshToken String?
+  appKey       String?
+  appSecret    String?
+  partnerId    String?
+  expiresAt    DateTime?
+  sellerId     String?
+  user         User      @relation(fields: [userId], references: [id])
+  userId       String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Product {
+  id                  String   @id @default(uuid())
+  aliexpressProductId String
+  aliexpressUrl       String?
+  title               String
+  titlePtBr           String?
+  description         String?
+  descriptionPtBr     String?
+  images              String   // JSON string array
+  costPriceUsd        Float
+  costPriceBrl        Float
+  margin              Float    @default(50)
+  salePriceBrl        Float
+  stock               Int
+  mlItemId            String?
+  shopeeItemId        String?
+  status              String   // DRAFT | ACTIVE | PAUSED | ERROR
+  lastSyncAt          DateTime?
+  user                User     @relation(fields: [userId], references: [id])
+  userId              String
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  Order               Order[]
+}
+
+model Order {
+  id                String   @id @default(uuid())
+  platform          String   // MERCADOLIVRE | SHOPEE
+  platformOrderId   String
+  aliexpressOrderId String?
+  buyerName         String
+  buyerAddress      String   // JSON string
+  buyerTaxId        String?
+  product           Product  @relation(fields: [productId], references: [id])
+  productId         String
+  quantity          Int      @default(1)
+  totalBrl          Float
+  status            String   // PENDING | FULFILLMENT_PENDING | PLACED_ON_AE | AWAITING_TRACKING | TRACKING_SYNCED | DELIVERED | CANCELLED | ERROR
+  trackingCode      String?
+  trackingUrl       String?
+  errorMessage      String?
+  user              User     @relation(fields: [userId], references: [id])
+  userId            String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model SyncLog {
+  id        String   @id @default(uuid())
+  type      String   // PRODUCT_SYNC | ORDER_FULFILLMENT | TRACKING_SYNC | TOKEN_REFRESH
+  entityId  String?
+  platform  String?
+  message   String
+  status    String   // SUCCESS | ERROR | INFO
+  createdAt DateTime @default(now())
+}

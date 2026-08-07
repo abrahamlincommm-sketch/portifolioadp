@@ -1,0 +1,83 @@
+.tracking-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.tracking-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+.tracking-card {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.tc-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tc-icon svg { width: 28px; height: 28px; }
+
+.tc-icon.amber { background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); }
+.tc-icon.blue { background: rgba(37, 99, 235, 0.15); color: var(--accent-secondary); }
+.tc-icon.emerald { background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); }
+
+.tc-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.tc-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.tc-label {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.tracking-table-card {
+  padding: 0 !important;
+}
+
+.tracking-code-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0,0,0,0.2);
+  padding: 4px 12px;
+  border-radius: var(--radius-sm);
+  width: fit-content;
+  font-family: monospace;
+  font-size: 1rem;
+}
+
+.copy-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  transition: color var(--transition-fast);
+}
+
+.copy-btn:hover {
+  color: var(--accent-primary);
+}
+.copy-btn svg { width: 14px; height: 14px; }
+
+.text-muted { color: var(--text-muted); font-style: italic; }

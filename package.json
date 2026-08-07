@@ -1,0 +1,21 @@
+{
+  "name": "dropshipping-hub",
+  "version": "1.0.0",
+  "description": "Hub de Automação de Dropshipping Cross-Border - AliExpress ↔ Mercado Livre + Shopee",
+  "private": true,
+  "scripts": {
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "build:backend": "cd backend && npm run build",
+    "build:frontend": "cd frontend && npm run build",
+    "build": "npm run build:backend && npm run build:frontend",
+    "db:generate": "cd backend && npx prisma generate",
+    "db:migrate": "cd backend && npx prisma migrate dev",
+    "db:studio": "cd backend && npx prisma studio",
+    "setup": "cd backend && npm install && npx prisma generate && npx prisma migrate dev --name init && cd ../frontend && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1"
+  }
+}
