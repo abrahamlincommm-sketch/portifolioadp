@@ -16,11 +16,25 @@ import dashboardRoutes from './modules/dashboard/dashboard.routes.js';
 
 const app = express();
 
-app.use(cors({ origin: env.FRONTEND_URL }));
+// CORS: permitir frontend local e produção (Netlify)
+app.use(cors({
+  origin: [
+    env.FRONTEND_URL,
+    'https://allydigitalpartners.com',
+    'https://www.allydigitalpartners.com',
+  ].filter(Boolean),
+  credentials: true,
+}));
+
 app.use(helmet());
 app.use(morgan('dev'));
 app.use(compression());
 app.use(express.json());
+
+// Health check para o Render
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
 
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productsRoutes);
@@ -32,7 +46,7 @@ app.use(errorHandler);
 
 const PORT = env.PORT || 3000;
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  setupScheduler(); // Start cron jobs
+  setupScheduler();
 });

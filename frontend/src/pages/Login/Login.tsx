@@ -1,6 +1,7 @@
 import React from 'react';
 import { useState } from 'react';
 import { useAuthStore } from '../../store/authStore';
+import { getApiUrl } from '../../api/client';
 import './Login.css';
 
 function Login() {
@@ -18,7 +19,7 @@ function Login() {
     setLoading(true);
 
     try {
-      const endpoint = isRegister ? '/api/auth/register' : '/api/auth/login';
+      const endpoint = isRegister ? getApiUrl('/auth/register') : getApiUrl('/auth/login');
       const body = isRegister
         ? { email, password, name }
         : { email, password };
