@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import Sidebar from './components/Layout/Sidebar';
 import Header from './components/Layout/Header';
 import Dashboard from './pages/Dashboard/Dashboard';
@@ -6,10 +6,22 @@ import Products from './pages/Products/Products';
 import Orders from './pages/Orders/Orders';
 import Tracking from './pages/Tracking/Tracking';
 import Settings from './pages/Settings/Settings';
+import Login from './pages/Login/Login';
+import { useAuthStore } from './store/authStore';
 import { useUIStore } from './store/uiStore';
-import './App.css'; // Let's quickly inject the layout CSS here since we don't have a Layout wrapper
+import './App.css';
 
-function App() {
+function PrivateRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated } = useAuthStore();
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <>{children}</>;
+}
+
+function AppLayout() {
   const { sidebarCollapsed } = useUIStore();
 
   return (
@@ -24,10 +36,34 @@ function App() {
             <Route path="/orders" element={<Orders />} />
             <Route path="/tracking" element={<Tracking />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>
       </div>
     </div>
+  );
+}
+
+function App() {
+  const { isAuthenticated } = useAuthStore();
+
+  return (
+    <Routes>
+      <Route
+        path="/login"
+        element={
+          isAuthenticated ? <Navigate to="/" replace /> : <Login />
+        }
+      />
+      <Route
+        path="/*"
+        element={
+          <PrivateRoute>
+            <AppLayout />
+          </PrivateRoute>
+        }
+      />
+    </Routes>
   );
 }
 
