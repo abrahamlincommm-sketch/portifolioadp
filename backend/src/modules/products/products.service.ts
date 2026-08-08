@@ -53,10 +53,11 @@ export class ProductsService {
     return product;
   }
 
-  async createManualProduct(userId: string, supplierName: string, productData: any) {
-    let supplier = await prisma.supplier.findUnique({ where: { name: supplierName.toUpperCase() } });
+  async createManualProduct(userId: string, supplierName: string = 'MANUAL', productData: any) {
+    const sName = (supplierName || 'MANUAL').toUpperCase();
+    let supplier = await prisma.supplier.findUnique({ where: { name: sName } });
     if (!supplier) {
-      supplier = await prisma.supplier.create({ data: { name: supplierName.toUpperCase(), type: 'MANUAL' } });
+      supplier = await prisma.supplier.create({ data: { name: sName, type: 'MANUAL' } });
     }
 
     const product = await prisma.product.create({
