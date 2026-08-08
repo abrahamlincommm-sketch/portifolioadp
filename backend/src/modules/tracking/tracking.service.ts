@@ -19,16 +19,36 @@ export class TrackingService {
         const adapter = SupplierRegistry.get(supplierName);
 
         if (!adapter) {
-          console.warn(`No adapter found for supplier: ${supplierName}`);
+          // Registrar erro no banco (visível no painel)
+          await prisma.syncLog.create({
+            data: {
+              type: 'TRACKING_SYNC',
+              entityId: order.id,
+              platform: order.platform,
+              message: `Adaptador não encontrado para o fornecedor: ${supplierName}`,
+              status: 'ERROR',
+            }
+          });
           continue;
         }
 
-        // For manual suppliers, skip tracking sync
+        // Para fornecedores manuais, pular sincronização de rastreio
         if (adapter.type === 'MANUAL') continue;
 
-        // Get credentials for this supplier
+        // Buscar credenciais do fornecedor
         const cred = order.user.credentials.find(c => c.platform === supplierName);
-        if (!cred) continue;
+        if (!cred) {
+          await prisma.syncLog.create({
+            data: {
+              type: 'TRACKING_SYNC',
+              entityId: order.id,
+              platform: order.platform,
+              message: `Credenciais do fornecedor ${supplierName} não encontradas para sincronizar rastreio`,
+              status: 'ERROR',
+            }
+          });
+          continue;
+        }
 
         const trackingResult = await adapter.getTracking(
           order.supplierOrderId!,
@@ -50,13 +70,24 @@ export class TrackingService {
               type: 'TRACKING_SYNC',
               entityId: order.id,
               platform: order.platform,
-              message: `Tracking synced: ${trackingResult.trackingCode}`,
+              message: `Rastreio sincronizado: ${trackingResult.trackingCode}`,
               status: 'SUCCESS'
             }
           });
         }
       } catch (error: any) {
-        console.error(`Failed to sync tracking for order ${order.id}:`, error.message);
+        console.error(`Falha ao sincronizar rastreio do pedido ${order.id}:`, error.message);
+
+        // Registrar erro no banco para que apareça no painel do usuário
+        await prisma.syncLog.create({
+          data: {
+            type: 'TRACKING_SYNC',
+            entityId: order.id,
+            platform: order.platform,
+            message: `Erro ao sincronizar rastreio: ${error.message}`,
+            status: 'ERROR',
+          }
+        });
       }
     }
   }
