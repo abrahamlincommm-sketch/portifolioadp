@@ -30,6 +30,11 @@ router.get('/me', authMiddleware, async (req: any, res) => {
   res.json(user);
 });
 
+router.put('/me', authMiddleware, async (req: any, res) => {
+  const user = await authService.updateProfile(req.userId, req.body);
+  res.json(user);
+});
+
 router.get('/mercadolivre/connect', authMiddleware, (req: any, res) => {
   res.redirect(authService.getMLAuthUrl(req.userId));
 });

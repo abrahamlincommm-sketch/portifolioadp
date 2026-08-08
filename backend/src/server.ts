@@ -14,6 +14,7 @@ import ordersRoutes from './modules/orders/orders.routes.js';
 import webhooksRoutes from './modules/webhooks/webhooks.routes.js';
 import dashboardRoutes from './modules/dashboard/dashboard.routes.js';
 import suppliersRoutes from './modules/suppliers/suppliers.routes.js';
+import trackingRoutes from './modules/tracking/tracking.routes.js';
 import { SupplierRegistry } from './modules/suppliers/supplier.registry.js';
 
 const app = express();
@@ -46,6 +47,7 @@ app.use('/api/orders', ordersRoutes);
 app.use('/api/webhooks', webhooksRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/suppliers', suppliersRoutes);
+app.use('/api/tracking', trackingRoutes);
 
 app.use(errorHandler);
 

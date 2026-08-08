@@ -1,115 +1,484 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '../../components/UI/Card';
 import { Button } from '../../components/UI/Button';
 import { Input } from '../../components/UI/Input';
+import { useAuthStore } from '../../store/authStore';
+import client from '../../api/client';
 import './Settings.css';
+
+interface Credential {
+  id: string;
+  platform: string;
+  sellerId?: string;
+  hasAccessToken?: boolean;
+  hasAppKey?: boolean;
+  expiresAt?: string;
+  createdAt: string;
+}
 
 const Settings = () => {
   const [activeTab, setActiveTab] = useState('connections');
+  const { user, setUser } = useAuthStore();
+
+  // Credentials State
+  const [credentials, setCredentials] = useState<Credential[]>([]);
+  const [loadingCreds, setLoadingCreds] = useState(false);
+  const [aliKey, setAliKey] = useState('');
+  const [aliSecret, setAliSecret] = useState('');
+  const [savingAli, setSavingAli] = useState(false);
+
+  // Profile Form State
+  const [profileName, setProfileName] = useState(user?.name || '');
+  const [profileEmail, setProfileEmail] = useState(user?.email || '');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileMsg, setProfileMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Margins State
+  const [defaultMargin, setDefaultMargin] = useState(() => localStorage.getItem('drophub_margin') || '50');
+  const [usdRate, setUsdRate] = useState(() => localStorage.getItem('drophub_usd_rate') || '5.60');
+  const [extraFee, setExtraFee] = useState(() => localStorage.getItem('drophub_extra_fee') || '0.00');
+  const [marginsSaved, setMarginsSaved] = useState(false);
+
+  // Sync State
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchCredentials();
+    if (user) {
+      setProfileName(user.name);
+      setProfileEmail(user.email);
+    }
+  }, [user]);
+
+  const fetchCredentials = async () => {
+    try {
+      setLoadingCreds(true);
+      const res = await client.get('/auth/credentials');
+      setCredentials(res.data || []);
+    } catch (err) {
+      console.error('Erro ao carregar credenciais:', err);
+    } finally {
+      setLoadingCreds(false);
+    }
+  };
+
+  const getCred = (platform: string) => {
+    return credentials.find(c => c.platform.toUpperCase() === platform.toUpperCase());
+  };
+
+  // ── AliExpress ──
+  const handleSaveAli = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!aliKey || !aliSecret) return;
+    try {
+      setSavingAli(true);
+      await client.post('/auth/aliexpress/credentials', { appKey: aliKey, appSecret: aliSecret });
+      setAliKey('');
+      setAliSecret('');
+      alert('Credenciais do AliExpress salvas com sucesso!');
+      fetchCredentials();
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Erro ao salvar credenciais do AliExpress');
+    } finally {
+      setSavingAli(false);
+    }
+  };
+
+  // ── Disconnect ──
+  const handleDisconnect = async (id: string, platformName: string) => {
+    if (!window.confirm(`Deseja realmente desconectar ${platformName}?`)) return;
+    try {
+      await client.delete(`/auth/credentials/${id}`);
+      fetchCredentials();
+    } catch (err: any) {
+      alert('Erro ao desconectar plataforma');
+    }
+  };
+
+  // ── Profile Update ──
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProfileMsg(null);
+    setSavingProfile(true);
+
+    try {
+      const res = await client.put('/auth/me', {
+        name: profileName,
+        email: profileEmail,
+        currentPassword: currentPassword || undefined,
+        newPassword: newPassword || undefined,
+      });
+
+      setUser(res.data);
+      setCurrentPassword('');
+      setNewPassword('');
+      setProfileMsg({ type: 'success', text: 'Perfil atualizado com sucesso!' });
+    } catch (err: any) {
+      setProfileMsg({ type: 'error', text: err.response?.data?.error || err.message || 'Erro ao atualizar perfil' });
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  // ── Save Margins ──
+  const handleSaveMargins = (e: React.FormEvent) => {
+    e.preventDefault();
+    localStorage.setItem('drophub_margin', defaultMargin);
+    localStorage.setItem('drophub_usd_rate', usdRate);
+    localStorage.setItem('drophub_extra_fee', extraFee);
+    setMarginsSaved(true);
+    setTimeout(() => setMarginsSaved(false), 3000);
+  };
+
+  // ── Force Sync ──
+  const handleForceSync = async () => {
+    try {
+      setSyncing(true);
+      setSyncMsg(null);
+      const res = await client.post('/tracking/sync');
+      setSyncMsg(res.data.message || 'Sincronização concluída com sucesso!');
+    } catch (err: any) {
+      setSyncMsg(err.response?.data?.message || 'Erro ao sincronizar rastreios.');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    alert('URL copiada para a área de transferência!');
+  };
+
+  const aliCred = getCred('ALIEXPRESS');
+  const mlCred = getCred('MERCADOLIVRE');
+  const shopeeCred = getCred('SHOPEE');
+
+  const backendHost = 'https://drophub-backend.onrender.com';
 
   return (
     <div className="settings-container">
       <div className="page-header">
-        <h2>Configurações</h2>
+        <div>
+          <h2>Configurações</h2>
+          <p className="subtitle">Gerencie suas credenciais, perfil e integrações</p>
+        </div>
       </div>
 
       <div className="settings-layout">
         <Card className="settings-sidebar">
           <nav className="settings-nav">
-            <button className={`settings-tab ${activeTab === 'connections' ? 'active' : ''}`} onClick={() => setActiveTab('connections')}>Conexões API</button>
-            <button className={`settings-tab ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>Perfil</button>
-            <button className={`settings-tab ${activeTab === 'margins' ? 'active' : ''}`} onClick={() => setActiveTab('margins')}>Margens Padrão</button>
-            <button className={`settings-tab ${activeTab === 'webhooks' ? 'active' : ''}`} onClick={() => setActiveTab('webhooks')}>Webhooks</button>
-            <button className={`settings-tab ${activeTab === 'sync' ? 'active' : ''}`} onClick={() => setActiveTab('sync')}>Sincronização</button>
+            <button className={`settings-tab ${activeTab === 'connections' ? 'active' : ''}`} onClick={() => setActiveTab('connections')}>
+              🔗 Conexões API
+            </button>
+            <button className={`settings-tab ${activeTab === 'profile' ? 'active' : ''}`} onClick={() => setActiveTab('profile')}>
+              👤 Perfil
+            </button>
+            <button className={`settings-tab ${activeTab === 'margins' ? 'active' : ''}`} onClick={() => setActiveTab('margins')}>
+              💰 Margens Padrão
+            </button>
+            <button className={`settings-tab ${activeTab === 'webhooks' ? 'active' : ''}`} onClick={() => setActiveTab('webhooks')}>
+              🔔 Webhooks
+            </button>
+            <button className={`settings-tab ${activeTab === 'sync' ? 'active' : ''}`} onClick={() => setActiveTab('sync')}>
+              ⚡ Sincronização
+            </button>
           </nav>
         </Card>
 
         <div className="settings-content">
+          {/* TAB: CONNECTIONS */}
           {activeTab === 'connections' && (
             <div className="tab-pane">
               <h3>Integrações de Plataforma</h3>
               <p className="text-secondary mb-4">Conecte suas contas para automatizar pedidos e rastreio.</p>
               
               <div className="connections-grid">
+                {/* AliExpress */}
                 <Card className="connection-card">
                   <div className="conn-header">
                     <div className="conn-brand aliexpress">AliExpress</div>
-                    <div className="conn-status connected"><span className="dot"></span> Conectado</div>
+                    <div className={`conn-status ${aliCred ? 'connected' : 'disconnected'}`}>
+                      <span className="dot"></span> {aliCred ? 'Conectado' : 'Desconectado'}
+                    </div>
                   </div>
-                  <div className="conn-body">
-                    <Input label="App Key" defaultValue="****************" type="password" />
-                    <Input label="App Secret" defaultValue="****************" type="password" />
-                  </div>
-                  <div className="conn-footer">
-                    <span className="last-sync">Última sinc: Hoje, 14:30</span>
-                    <Button variant="secondary" size="sm">Atualizar</Button>
-                  </div>
+                  <form onSubmit={handleSaveAli} className="conn-body">
+                    <Input 
+                      label="App Key" 
+                      placeholder={aliCred ? 'Configurado (digite para alterar)' : 'Insira sua App Key'} 
+                      value={aliKey}
+                      onChange={(e) => setAliKey(e.target.value)}
+                      required
+                    />
+                    <Input 
+                      label="App Secret" 
+                      placeholder={aliCred ? 'Configurado (digite para alterar)' : 'Insira seu App Secret'} 
+                      type="password"
+                      value={aliSecret}
+                      onChange={(e) => setAliSecret(e.target.value)}
+                      required
+                    />
+                    <div className="conn-footer" style={{ marginTop: '12px' }}>
+                      <span className="last-sync">{aliCred ? 'Credencial ativa' : 'Nenhuma chave salva'}</span>
+                      <Button variant="primary" size="sm" disabled={savingAli}>
+                        {savingAli ? 'Salvando...' : aliCred ? 'Atualizar' : 'Salvar Chaves'}
+                      </Button>
+                    </div>
+                  </form>
                 </Card>
 
+                {/* Mercado Livre */}
                 <Card className="connection-card">
                   <div className="conn-header">
                     <div className="conn-brand ml">Mercado Livre</div>
-                    <div className="conn-status connected"><span className="dot"></span> Conectado</div>
+                    <div className={`conn-status ${mlCred ? 'connected' : 'disconnected'}`}>
+                      <span className="dot"></span> {mlCred ? 'Conectado' : 'Desconectado'}
+                    </div>
                   </div>
                   <div className="conn-body">
-                    <p className="conn-desc">Autenticação via OAuth2. Acesso a anúncios e pedidos.</p>
+                    <p className="conn-desc">
+                      {mlCred 
+                        ? `Conexão OAuth2 ativa com sua conta Mercado Livre. Seller ID: ${mlCred.sellerId || 'Vinculado'}.`
+                        : 'Autenticação oficial via OAuth2. Permite sincronizar anúncios e receber pedidos automaticamente.'}
+                    </p>
                   </div>
                   <div className="conn-footer">
-                    <span className="last-sync">Última sinc: Há 5 min</span>
-                    <Button variant="danger" size="sm">Desconectar</Button>
+                    <span className="last-sync">{mlCred ? 'Token sincronizado' : 'Não conectado'}</span>
+                    {mlCred ? (
+                      <Button variant="danger" size="sm" onClick={() => handleDisconnect(mlCred.id, 'Mercado Livre')}>
+                        Desconectar
+                      </Button>
+                    ) : (
+                      <a href={`${backendHost}/api/auth/mercadolivre/connect`} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
+                        <Button variant="primary" size="sm">Conectar Conta</Button>
+                      </a>
+                    )}
                   </div>
                 </Card>
 
+                {/* Shopee */}
                 <Card className="connection-card">
                   <div className="conn-header">
                     <div className="conn-brand shopee">Shopee</div>
-                    <div className="conn-status disconnected"><span className="dot"></span> Desconectado</div>
+                    <div className={`conn-status ${shopeeCred ? 'connected' : 'disconnected'}`}>
+                      <span className="dot"></span> {shopeeCred ? 'Conectado' : 'Desconectado'}
+                    </div>
                   </div>
                   <div className="conn-body">
-                    <p className="conn-desc">Requer autorização no portal de desenvolvedores da Shopee.</p>
+                    <p className="conn-desc">
+                      {shopeeCred 
+                        ? `Conexão ativa com o Open Platform da Shopee. Shop ID: ${shopeeCred.sellerId || 'Vinculado'}.`
+                        : 'Requer autorização no portal de desenvolvedores da Shopee (Open Platform).'}
+                    </p>
                   </div>
                   <div className="conn-footer">
-                    <span className="last-sync">-</span>
-                    <Button variant="primary" size="sm">Conectar Conta</Button>
+                    <span className="last-sync">{shopeeCred ? 'Token sincronizado' : 'Não conectado'}</span>
+                    {shopeeCred ? (
+                      <Button variant="danger" size="sm" onClick={() => handleDisconnect(shopeeCred.id, 'Shopee')}>
+                        Desconectar
+                      </Button>
+                    ) : (
+                      <a href={`${backendHost}/api/auth/shopee/connect`} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
+                        <Button variant="primary" size="sm">Conectar Conta</Button>
+                      </a>
+                    )}
                   </div>
                 </Card>
               </div>
             </div>
           )}
 
-          {activeTab === 'margins' && (
+          {/* TAB: PROFILE */}
+          {activeTab === 'profile' && (
             <div className="tab-pane">
-              <h3>Margens e Precificação</h3>
+              <h3>Meu Perfil</h3>
+              <p className="text-secondary mb-4">Atualize suas informações cadastrais e segurança da conta.</p>
+
+              {profileMsg && (
+                <div style={{
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  marginBottom: '16px',
+                  background: profileMsg.type === 'success' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(244, 63, 94, 0.15)',
+                  border: `1px solid ${profileMsg.type === 'success' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(244, 63, 94, 0.3)'}`,
+                  color: profileMsg.type === 'success' ? '#10b981' : '#f43f5e'
+                }}>
+                  {profileMsg.text}
+                </div>
+              )}
+
               <Card className="settings-card">
-                <div className="form-grid">
-                  <Input label="Margem de Lucro Padrão (%)" defaultValue="70" type="number" />
-                  <Input label="Taxa de Câmbio USD para BRL (Fixa)" defaultValue="5.15" type="number" step="0.01" />
-                  <Input label="Acréscimo de Frete Padrão (R$)" defaultValue="15.00" type="number" step="0.01" />
-                </div>
-                <div className="mt-4">
-                  <Button>Salvar Configurações</Button>
-                </div>
+                <form onSubmit={handleUpdateProfile}>
+                  <div className="form-grid">
+                    <Input 
+                      label="Nome Completo" 
+                      value={profileName}
+                      onChange={(e) => setProfileName(e.target.value)}
+                      required 
+                    />
+                    <Input 
+                      label="E-mail" 
+                      type="email"
+                      value={profileEmail}
+                      onChange={(e) => setProfileEmail(e.target.value)}
+                      required 
+                    />
+                  </div>
+                  <h4 className="mt-4 mb-2">Alterar Senha (opcional)</h4>
+                  <div className="form-grid">
+                    <Input 
+                      label="Senha Atual" 
+                      type="password" 
+                      placeholder="••••••••"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                    />
+                    <Input 
+                      label="Nova Senha" 
+                      type="password" 
+                      placeholder="••••••••"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                    />
+                  </div>
+                  <div className="mt-4">
+                    <Button disabled={savingProfile}>
+                      {savingProfile ? 'Salvando...' : 'Atualizar Perfil'}
+                    </Button>
+                  </div>
+                </form>
               </Card>
             </div>
           )}
 
-          {activeTab === 'profile' && (
+          {/* TAB: MARGINS */}
+          {activeTab === 'margins' && (
             <div className="tab-pane">
-              <h3>Meu Perfil</h3>
+              <h3>Margens e Precificação</h3>
+              <p className="text-secondary mb-4">Defina os parâmetros padrão para cálculo automático dos preços de venda.</p>
               <Card className="settings-card">
-                <div className="form-grid">
-                  <Input label="Nome Completo" defaultValue="Alisson" />
-                  <Input label="E-mail" defaultValue="admin@drophub.com" />
-                </div>
-                <h4 className="mt-4 mb-2">Alterar Senha</h4>
-                <div className="form-grid">
-                  <Input label="Senha Atual" type="password" />
-                  <Input label="Nova Senha" type="password" />
-                </div>
-                <div className="mt-4">
-                  <Button>Atualizar Perfil</Button>
-                </div>
+                <form onSubmit={handleSaveMargins}>
+                  <div className="form-grid">
+                    <Input 
+                      label="Margem de Lucro Padrão (%)" 
+                      type="number" 
+                      value={defaultMargin}
+                      onChange={(e) => setDefaultMargin(e.target.value)}
+                      required
+                    />
+                    <Input 
+                      label="Taxa de Câmbio USD para BRL" 
+                      type="number" 
+                      step="0.01" 
+                      value={usdRate}
+                      onChange={(e) => setUsdRate(e.target.value)}
+                      required
+                    />
+                    <Input 
+                      label="Acréscimo de Embalagem/Frete (R$)" 
+                      type="number" 
+                      step="0.01" 
+                      value={extraFee}
+                      onChange={(e) => setExtraFee(e.target.value)}
+                    />
+                  </div>
+                  <div className="mt-4" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <Button type="submit">Salvar Configurações</Button>
+                    {marginsSaved && <span style={{ color: '#10b981', fontSize: '0.9rem' }}>✓ Configurações salvas!</span>}
+                  </div>
+                </form>
               </Card>
+            </div>
+          )}
+
+          {/* TAB: WEBHOOKS */}
+          {activeTab === 'webhooks' && (
+            <div className="tab-pane">
+              <h3>Notificações em Tempo Real (Webhooks)</h3>
+              <p className="text-secondary mb-4">Configure estes endpoints nas plataformas para receber pedidos instantaneamente.</p>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <Card>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <strong style={{ fontSize: '1rem', color: '#f59e0b' }}>Mercado Livre Webhook</strong>
+                    <span style={{ fontSize: '0.8rem', padding: '2px 8px', borderRadius: '4px', background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>Tópico: orders_v2</span>
+                  </div>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '12px' }}>
+                    Cadastre este link no portal de desenvolvedores do Mercado Livre para ser avisado a cada nova venda.
+                  </p>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <Input 
+                      readOnly 
+                      value={`${backendHost}/api/webhooks/mercadolivre`} 
+                      style={{ flex: 1 }} 
+                    />
+                    <Button variant="secondary" onClick={() => copyToClipboard(`${backendHost}/api/webhooks/mercadolivre`)}>
+                      Copiar
+                    </Button>
+                  </div>
+                </Card>
+
+                <Card>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                    <strong style={{ fontSize: '1rem', color: '#f43f5e' }}>Shopee Push Notification</strong>
+                    <span style={{ fontSize: '0.8rem', padding: '2px 8px', borderRadius: '4px', background: 'rgba(244, 63, 94, 0.15)', color: '#f43f5e' }}>Evento: order.status_update</span>
+                  </div>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '12px' }}>
+                    Cadastre este link nas configurações de Push Notification do Shopee Open Platform.
+                  </p>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <Input 
+                      readOnly 
+                      value={`${backendHost}/api/webhooks/shopee`} 
+                      style={{ flex: 1 }} 
+                    />
+                    <Button variant="secondary" onClick={() => copyToClipboard(`${backendHost}/api/webhooks/shopee`)}>
+                      Copiar
+                    </Button>
+                  </div>
+                </Card>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: SYNC */}
+          {activeTab === 'sync' && (
+            <div className="tab-pane">
+              <h3>Automações e Sincronização</h3>
+              <p className="text-secondary mb-4">Status dos robôs agendados que rodam no servidor.</p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <Card>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                    <div style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                      <div style={{ color: '#10b981', fontWeight: 600, marginBottom: '4px' }}>🚚 Rastreios</div>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>A cada 30 minutos</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>Busca código no AliExpress e envia para o comprador</div>
+                    </div>
+
+                    <div style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                      <div style={{ color: '#7c3aed', fontWeight: 600, marginBottom: '4px' }}>📦 Estoque & Preços</div>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>A cada 1 hora</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>Sincroniza variações de preço do fornecedor</div>
+                    </div>
+
+                    <div style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                      <div style={{ color: '#2563eb', fontWeight: 600, marginBottom: '4px' }}>🔑 Renovação OAuth</div>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>A cada 4 horas</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>Renova tokens para manter as contas conectadas</div>
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: '24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <Button onClick={handleForceSync} disabled={syncing}>
+                      {syncing ? 'Sincronizando agora...' : '⚡ Forçar Sincronização Imediata'}
+                    </Button>
+                    {syncMsg && <span style={{ color: '#10b981', fontSize: '0.85rem' }}>{syncMsg}</span>}
+                  </div>
+                </Card>
+              </div>
             </div>
           )}
         </div>

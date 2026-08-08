@@ -41,6 +41,31 @@ export class AuthService {
     return prisma.user.findUnique({ where: { id: userId }, select: { id: true, email: true, name: true } });
   }
 
+  async updateProfile(userId: string, data: any) {
+    const updateData: any = {};
+    if (data.name) updateData.name = data.name;
+    if (data.email) updateData.email = data.email;
+
+    if (data.newPassword) {
+      if (!data.currentPassword) {
+        throw new Error('Informe a senha atual para definir uma nova senha');
+      }
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user || !(await bcrypt.compare(data.currentPassword, user.password))) {
+        throw new Error('Senha atual incorreta');
+      }
+      updateData.password = await bcrypt.hash(data.newPassword, 12);
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: updateData,
+      select: { id: true, email: true, name: true }
+    });
+
+    return updated;
+  }
+
   // ─── MERCADO LIVRE ────────────────────────────────────────────────
 
   getMLAuthUrl(userId: string) {
