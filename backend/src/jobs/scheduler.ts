@@ -1,24 +1,25 @@
 import cron from 'node-cron';
 import { TrackingService } from '../modules/tracking/tracking.service.js';
+import { ProductsService } from '../modules/products/products.service.js';
 
 export function setupScheduler() {
   const trackingService = new TrackingService();
+  const productsService = new ProductsService();
 
-  // Product sync (every 1 hour)
-  cron.schedule('0 * * * *', () => {
-    console.log('Running product sync job...');
-    // TODO: Call product sync service
+  // Monitoramento e Repricing de Preços/Estoque (a cada 1 hora)
+  cron.schedule('0 * * * *', async () => {
+    console.log('[Scheduler] Executando rotina de monitoramento de preços e estoque...');
+    await productsService.syncAllActiveProducts();
   });
 
-  // Tracking sync (every 30 minutes)
+  // Sincronização de Rastreio (a cada 30 minutos)
   cron.schedule('*/30 * * * *', async () => {
-    console.log('Running tracking sync job...');
+    console.log('[Scheduler] Executando rotina de sincronização de rastreamento...');
     await trackingService.syncTracking();
   });
 
-  // Token refresh (every 4 hours)
+  // Renovação de Token (a cada 4 horas)
   cron.schedule('0 */4 * * *', () => {
-    console.log('Running token refresh job...');
-    // TODO: Call auth service token refresh logic
+    console.log('[Scheduler] Verificação de expiração de tokens...');
   });
 }

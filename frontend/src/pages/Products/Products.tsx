@@ -36,6 +36,10 @@ const Products = () => {
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
+  const [syncingId, setSyncingId] = useState<string | null>(null);
+  const [scrapingLink, setScrapingLink] = useState(false);
+  const [scrapeSuccessMsg, setScrapeSuccessMsg] = useState('');
+
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [supplierFilter, setSupplierFilter] = useState('all');
@@ -43,7 +47,7 @@ const Products = () => {
   // Form states
   const [importUrl, setImportUrl] = useState('');
   const [selectedSupplier, setSelectedSupplier] = useState('ALIEXPRESS');
-  const [importMode, setImportMode] = useState<'api' | 'manual'>('api');
+  const [importMode, setImportMode] = useState<'api' | 'manual'>('manual');
   const [errorMsg, setErrorMsg] = useState('');
 
   const [manualForm, setManualForm] = useState({
@@ -51,8 +55,9 @@ const Products = () => {
     supplierName: '',
     supplierUrl: '',
     costPriceBrl: '',
+    margin: '50',
     salePriceBrl: '',
-    stock: '',
+    stock: '10',
     description: '',
   });
 
@@ -73,7 +78,56 @@ const Products = () => {
   };
 
   const handleManualChange = (field: string, value: string) => {
-    setManualForm(prev => ({ ...prev, [field]: value }));
+    setManualForm(prev => {
+      const updated = { ...prev, [field]: value };
+      
+      // Auto-recalculate sale price if cost or margin changes
+      if (field === 'costPriceBrl' || field === 'margin') {
+        const cost = parseFloat(field === 'costPriceBrl' ? value : updated.costPriceBrl) || 0;
+        const margin = parseFloat(field === 'margin' ? value : updated.margin) || 50;
+        if (cost > 0) {
+          updated.salePriceBrl = (cost * (1 + margin / 100)).toFixed(2);
+        }
+      }
+      return updated;
+    });
+  };
+
+  // ⚡ Puxar Dados do Link do Fornecedor
+  const handleScrapeLink = async () => {
+    if (!manualForm.supplierUrl) {
+      setErrorMsg('Cole o link do produto no campo abaixo primeiro.');
+      return;
+    }
+    try {
+      setScrapingLink(true);
+      setErrorMsg('');
+      setScrapeSuccessMsg('');
+
+      const res = await client.post('/products/scrape-link', { url: manualForm.supplierUrl });
+      const data = res.data;
+
+      if (data.title || data.price) {
+        const cost = data.price ? (data.currency === 'USD' ? data.price * 5.6 : data.price) : 0;
+        const margin = parseFloat(manualForm.margin) || 50;
+        const calculatedSale = cost > 0 ? (cost * (1 + margin / 100)).toFixed(2) : manualForm.salePriceBrl;
+
+        setManualForm(prev => ({
+          ...prev,
+          title: data.title || prev.title,
+          costPriceBrl: cost > 0 ? cost.toFixed(2) : prev.costPriceBrl,
+          salePriceBrl: calculatedSale,
+          description: data.description || prev.description,
+        }));
+        setScrapeSuccessMsg(`✓ Dados e preço identificados no link! Custo: R$ ${cost.toFixed(2)} | Venda sugerida: R$ ${calculatedSale}`);
+      } else {
+        setErrorMsg('Não foi possível extrair preço automaticamente desta URL. Você pode preencher o valor manualmente.');
+      }
+    } catch (err: any) {
+      setErrorMsg('Erro ao conectar com a página do fornecedor.');
+    } finally {
+      setScrapingLink(false);
+    }
   };
 
   const handleImportApi = async (e: React.FormEvent) => {
@@ -109,6 +163,7 @@ const Products = () => {
         supplierName: manualForm.supplierName || 'MANUAL',
         supplierUrl: manualForm.supplierUrl,
         costPriceBrl: Number(manualForm.costPriceBrl) || 0,
+        margin: Number(manualForm.margin) || 50,
         salePriceBrl: Number(manualForm.salePriceBrl) || 0,
         stock: Number(manualForm.stock) || 0,
         description: manualForm.description,
@@ -118,16 +173,37 @@ const Products = () => {
         supplierName: '',
         supplierUrl: '',
         costPriceBrl: '',
+        margin: '50',
         salePriceBrl: '',
-        stock: '',
+        stock: '10',
         description: '',
       });
+      setScrapeSuccessMsg('');
       closeModal();
       fetchProducts();
     } catch (err: any) {
       setErrorMsg(err.response?.data?.message || err.message || 'Erro ao cadastrar produto');
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  // ⚡ Sincronizar Custo e Preço com o Fornecedor
+  const handleSyncProduct = async (id: string) => {
+    try {
+      setSyncingId(id);
+      const res = await client.post(`/products/${id}/sync`);
+      const { priceChanged, oldCost, newCost, newSalePrice } = res.data;
+      if (priceChanged) {
+        alert(`⚠️ Preço alterado no fornecedor!\nCusto antigo: R$ ${oldCost.toFixed(2)} ➔ Novo custo: R$ ${newCost.toFixed(2)}\nPreço de venda recalculado: R$ ${newSalePrice.toFixed(2)} (Margem protegida!)`);
+      } else {
+        alert('✓ Custo verificado no fornecedor. Preço e estoque permanecem atualizados!');
+      }
+      fetchProducts();
+    } catch (err: any) {
+      alert('Erro ao sincronizar produto com o fornecedor.');
+    } finally {
+      setSyncingId(null);
     }
   };
 
@@ -186,7 +262,7 @@ const Products = () => {
       <div className="page-header">
         <div>
           <h2>Gerenciar Produtos</h2>
-          <p className="subtitle">Importe de fornecedores ou cadastre produtos no seu catálogo</p>
+          <p className="subtitle">Importe direto do link do fornecedor com proteção automática de margem de lucro</p>
         </div>
         <div className="header-actions">
           <Button
@@ -195,10 +271,11 @@ const Products = () => {
             onClick={() => {
               setImportMode('manual');
               setErrorMsg('');
+              setScrapeSuccessMsg('');
               openModal('add-product');
             }}
           >
-            Cadastro Manual
+            Cadastro com Link / Manual
           </Button>
           <Button
             leftIcon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>}
@@ -208,7 +285,7 @@ const Products = () => {
               openModal('add-product');
             }}
           >
-            Importar via API
+            Importar via API (AliExpress)
           </Button>
         </div>
       </div>
@@ -255,8 +332,30 @@ const Products = () => {
                 </div>
 
                 <div className="product-info">
-                  <div className="product-supplier-tag" style={{ borderColor: supplier.color, color: supplier.color }}>
-                    {supplier.label}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <div className="product-supplier-tag" style={{ borderColor: supplier.color, color: supplier.color }}>
+                      {supplier.label}
+                    </div>
+                    <button 
+                      onClick={() => handleSyncProduct(prod.id)}
+                      disabled={syncingId === prod.id}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--accent-primary)',
+                        fontSize: '0.75rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                      title="Verificar preço e estoque atualizados no fornecedor"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="12" height="12">
+                        <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                      </svg>
+                      {syncingId === prod.id ? 'Checando...' : 'Sincronizar Custo'}
+                    </button>
                   </div>
                   <h4 className="product-title">{prod.title}</h4>
 
@@ -310,14 +409,14 @@ const Products = () => {
             </div>
             <h3 style={{ margin: 0 }}>Nenhum produto cadastrado ainda</h3>
             <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '0.9rem' }}>
-              Seu catálogo está vazio. Adicione seu primeiro produto importando de um fornecedor ou fazendo o cadastro manual.
+              Seu catálogo está vazio. Adicione seu primeiro produto puxando do link do fornecedor ou via cadastro manual.
             </p>
             <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
               <Button onClick={() => { setImportMode('manual'); openModal('add-product'); }}>
-                Cadastrar Manualmente
+                Cadastrar via Link / Manual
               </Button>
               <Button variant="secondary" onClick={() => { setImportMode('api'); openModal('add-product'); }}>
-                Importar via Fornecedor
+                Importar via AliExpress
               </Button>
             </div>
           </div>
@@ -325,11 +424,17 @@ const Products = () => {
       )}
 
       {/* Modal: Add Product */}
-      <Modal id="add-product" title={importMode === 'api' ? 'Importar Produto via Fornecedor' : 'Cadastro Manual de Produto'}>
+      <Modal id="add-product" title={importMode === 'api' ? 'Importar Produto via API' : 'Cadastro de Produto com Link / Manual'}>
         <div className="import-modal-content">
           {errorMsg && (
             <div style={{ padding: '10px 14px', background: 'rgba(244, 63, 94, 0.15)', border: '1px solid rgba(244, 63, 94, 0.3)', borderRadius: '8px', color: '#f43f5e', fontSize: '0.85rem' }}>
               {errorMsg}
+            </div>
+          )}
+
+          {scrapeSuccessMsg && (
+            <div style={{ padding: '10px 14px', background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '8px', color: '#10b981', fontSize: '0.85rem' }}>
+              {scrapeSuccessMsg}
             </div>
           )}
 
@@ -354,8 +459,8 @@ const Products = () => {
               </div>
 
               <Input
-                label="URL ou ID do Produto"
-                placeholder={selectedSupplier === 'ALIEXPRESS' ? 'Ex: 10050012345678 ou URL completa' : 'Cole a URL do produto...'}
+                label="URL ou ID do Produto no AliExpress"
+                placeholder="Ex: 10050012345678 ou https://pt.aliexpress.com/item/..."
                 value={importUrl}
                 onChange={(e) => setImportUrl(e.target.value)}
                 required
@@ -369,18 +474,49 @@ const Products = () => {
             </form>
           ) : (
             <form onSubmit={handleCreateManual} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <Input
-                label="Nome do Fornecedor"
-                placeholder="Ex: Fábrica SP, Shein, Nacional..."
-                value={manualForm.supplierName}
-                onChange={(e) => handleManualChange('supplierName', e.target.value)}
-              />
-              <Input
-                label="Link do Fornecedor (opcional)"
-                placeholder="https://..."
-                value={manualForm.supplierUrl}
-                onChange={(e) => handleManualChange('supplierUrl', e.target.value)}
-              />
+              <div>
+                <label className="field-label" style={{ marginBottom: '6px', display: 'block', fontSize: '0.85rem', fontWeight: 500 }}>
+                  Link do Produto no Fornecedor (URL)
+                </label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    className="ui-input"
+                    style={{ flex: 1 }}
+                    placeholder="Cole o link (AliExpress, Shopee, Shein, loja nacional...)"
+                    value={manualForm.supplierUrl}
+                    onChange={(e) => handleManualChange('supplierUrl', e.target.value)}
+                  />
+                  <Button 
+                    type="button" 
+                    variant="secondary" 
+                    onClick={handleScrapeLink}
+                    disabled={scrapingLink}
+                    style={{ whiteSpace: 'nowrap' }}
+                  >
+                    {scrapingLink ? 'Puxando...' : '⚡ Puxar do Link'}
+                  </Button>
+                </div>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
+                  O sistema extrai o preço ao vivo do link e atualiza se o fornecedor mudar o valor.
+                </span>
+              </div>
+
+              <div className="form-row">
+                <Input
+                  label="Nome do Fornecedor"
+                  placeholder="Ex: Fábrica SP, Shein, etc."
+                  value={manualForm.supplierName}
+                  onChange={(e) => handleManualChange('supplierName', e.target.value)}
+                />
+                <Input
+                  label="Margem de Lucro Desejada (%)"
+                  placeholder="50"
+                  type="number"
+                  value={manualForm.margin}
+                  onChange={(e) => handleManualChange('margin', e.target.value)}
+                />
+              </div>
+
               <Input
                 label="Título do Produto"
                 placeholder="Nome que aparecerá no anúncio"
@@ -388,18 +524,20 @@ const Products = () => {
                 onChange={(e) => handleManualChange('title', e.target.value)}
                 required
               />
+
               <div className="form-row">
                 <Input
-                  label="Custo (R$)"
+                  label="Custo no Fornecedor (R$)"
                   placeholder="0,00"
                   type="number"
                   step="0.01"
                   value={manualForm.costPriceBrl}
                   onChange={(e) => handleManualChange('costPriceBrl', e.target.value)}
+                  required
                 />
                 <Input
-                  label="Venda (R$)"
-                  placeholder="0,00"
+                  label="Preço de Venda (R$)"
+                  placeholder="Calculado automático"
                   type="number"
                   step="0.01"
                   value={manualForm.salePriceBrl}
@@ -408,12 +546,13 @@ const Products = () => {
                 />
                 <Input
                   label="Estoque"
-                  placeholder="0"
+                  placeholder="10"
                   type="number"
                   value={manualForm.stock}
                   onChange={(e) => handleManualChange('stock', e.target.value)}
                 />
               </div>
+
               <div className="field-group">
                 <label className="field-label">Descrição (opcional)</label>
                 <textarea
@@ -424,9 +563,10 @@ const Products = () => {
                   onChange={(e) => handleManualChange('description', e.target.value)}
                 />
               </div>
+
               <div className="modal-actions">
                 <Button variant="primary" disabled={actionLoading}>
-                  {actionLoading ? 'Salvando...' : 'Cadastrar Produto'}
+                  {actionLoading ? 'Salvando...' : 'Cadastrar e Salvar Produto'}
                 </Button>
               </div>
             </form>
@@ -435,17 +575,17 @@ const Products = () => {
           <div className="mode-toggle">
             <button
               type="button"
-              className={`mode-btn ${importMode === 'api' ? 'active' : ''}`}
-              onClick={() => { setImportMode('api'); setErrorMsg(''); }}
+              className={`mode-btn ${importMode === 'manual' ? 'active' : ''}`}
+              onClick={() => { setImportMode('manual'); setErrorMsg(''); setScrapeSuccessMsg(''); }}
             >
-              🔗 Importar via API
+              ⚡ Puxar do Link / Manual
             </button>
             <button
               type="button"
-              className={`mode-btn ${importMode === 'manual' ? 'active' : ''}`}
-              onClick={() => { setImportMode('manual'); setErrorMsg(''); }}
+              className={`mode-btn ${importMode === 'api' ? 'active' : ''}`}
+              onClick={() => { setImportMode('api'); setErrorMsg(''); setScrapeSuccessMsg(''); }}
             >
-              ✏️ Cadastro Manual
+              🔗 Importar via API (AliExpress)
             </button>
           </div>
         </div>

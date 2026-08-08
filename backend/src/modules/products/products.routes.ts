@@ -17,6 +17,13 @@ router.get('/:id', async (req: any, res) => {
   res.json(product);
 });
 
+router.post('/scrape-link', async (req: any, res) => {
+  const { url } = req.body;
+  if (!url) return res.status(400).json({ error: 'URL do produto é obrigatória' });
+  const data = await productsService.scrapeLink(url);
+  res.json(data);
+});
+
 router.post('/import', async (req: any, res) => {
   const { supplierName, productId } = req.body;
   const product = await productsService.importProduct(req.userId, supplierName, productId);
