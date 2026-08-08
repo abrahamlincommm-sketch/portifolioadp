@@ -16,6 +16,15 @@ interface Credential {
   createdAt: string;
 }
 
+interface CustomSupplier {
+  id: string;
+  name: string;
+  type: string;
+  apiEndpoint?: string;
+  isActive: boolean;
+  config?: string;
+}
+
 const Settings = () => {
   const [activeTab, setActiveTab] = useState('connections');
   const { user, setUser } = useAuthStore();
@@ -26,6 +35,14 @@ const Settings = () => {
   const [aliKey, setAliKey] = useState('');
   const [aliSecret, setAliSecret] = useState('');
   const [savingAli, setSavingAli] = useState(false);
+
+  // Custom Suppliers State
+  const [customSuppliers, setCustomSuppliers] = useState<CustomSupplier[]>([]);
+  const [showAddSupplier, setShowAddSupplier] = useState(false);
+  const [newSupplierName, setNewSupplierName] = useState('');
+  const [newSupplierEndpoint, setNewSupplierEndpoint] = useState('');
+  const [newSupplierApiKey, setNewSupplierApiKey] = useState('');
+  const [savingSupplier, setSavingSupplier] = useState(false);
 
   // Profile Form State
   const [profileName, setProfileName] = useState(user?.name || '');
@@ -47,6 +64,7 @@ const Settings = () => {
 
   useEffect(() => {
     fetchCredentials();
+    fetchSuppliers();
     if (user) {
       setProfileName(user.name);
       setProfileEmail(user.email);
@@ -65,8 +83,53 @@ const Settings = () => {
     }
   };
 
+  const fetchSuppliers = async () => {
+    try {
+      const res = await client.get('/suppliers');
+      setCustomSuppliers(res.data?.dbSuppliers || []);
+    } catch (err) {
+      console.error('Erro ao buscar fornecedores:', err);
+    }
+  };
+
   const getCred = (platform: string) => {
     return credentials.find(c => c.platform.toUpperCase() === platform.toUpperCase());
+  };
+
+  // ── Salvar Fornecedor Customizado / API ──
+  const handleCreateSupplier = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newSupplierName) return;
+    try {
+      setSavingSupplier(true);
+      await client.post('/suppliers', {
+        name: newSupplierName,
+        config: {
+          endpoint: newSupplierEndpoint,
+          apiKey: newSupplierApiKey
+        }
+      });
+      setNewSupplierName('');
+      setNewSupplierEndpoint('');
+      setNewSupplierApiKey('');
+      setShowAddSupplier(false);
+      fetchSuppliers();
+      alert(`Fornecedor "${newSupplierName}" cadastrado com sucesso!`);
+    } catch (err: any) {
+      alert(err.response?.data?.message || 'Erro ao cadastrar fornecedor');
+    } finally {
+      setSavingSupplier(false);
+    }
+  };
+
+  const handleDeleteSupplier = async (id: string, name: string) => {
+    if (!window.confirm(`Deseja excluir o fornecedor "${name}"?`)) return;
+    try {
+      await client.delete(`/suppliers/${id}`);
+      fetchSuppliers();
+    } catch (err) {
+      alert('Erro ao excluir fornecedor');
+    }
   };
 
   // ── AliExpress ──
@@ -163,7 +226,7 @@ const Settings = () => {
       <div className="page-header">
         <div>
           <h2>Configurações</h2>
-          <p className="subtitle">Gerencie suas credenciais, perfil e integrações</p>
+          <p className="subtitle">Gerencie suas conexões de marketplaces, fornecedores e automações</p>
         </div>
       </div>
 
@@ -192,43 +255,10 @@ const Settings = () => {
           {/* TAB: CONNECTIONS */}
           {activeTab === 'connections' && (
             <div className="tab-pane">
-              <h3>Integrações de Plataforma</h3>
-              <p className="text-secondary mb-4">Conecte suas contas para automatizar pedidos e rastreio.</p>
+              <h3>Canais de Venda (Marketplaces)</h3>
+              <p className="text-secondary mb-4">Conecte suas contas onde os anúncios serão publicados e os pedidos recebidos.</p>
               
-              <div className="connections-grid">
-                {/* AliExpress */}
-                <Card className="connection-card">
-                  <div className="conn-header">
-                    <div className="conn-brand aliexpress">AliExpress</div>
-                    <div className={`conn-status ${aliCred ? 'connected' : 'disconnected'}`}>
-                      <span className="dot"></span> {aliCred ? 'Conectado' : 'Desconectado'}
-                    </div>
-                  </div>
-                  <form onSubmit={handleSaveAli} className="conn-body">
-                    <Input 
-                      label="App Key" 
-                      placeholder={aliCred ? 'Configurado (digite para alterar)' : 'Insira sua App Key'} 
-                      value={aliKey}
-                      onChange={(e) => setAliKey(e.target.value)}
-                      required
-                    />
-                    <Input 
-                      label="App Secret" 
-                      placeholder={aliCred ? 'Configurado (digite para alterar)' : 'Insira seu App Secret'} 
-                      type="password"
-                      value={aliSecret}
-                      onChange={(e) => setAliSecret(e.target.value)}
-                      required
-                    />
-                    <div className="conn-footer" style={{ marginTop: '12px' }}>
-                      <span className="last-sync">{aliCred ? 'Credencial ativa' : 'Nenhuma chave salva'}</span>
-                      <Button variant="primary" size="sm" disabled={savingAli}>
-                        {savingAli ? 'Salvando...' : aliCred ? 'Atualizar' : 'Salvar Chaves'}
-                      </Button>
-                    </div>
-                  </form>
-                </Card>
-
+              <div className="connections-grid" style={{ marginBottom: '32px' }}>
                 {/* Mercado Livre */}
                 <Card className="connection-card">
                   <div className="conn-header">
@@ -285,6 +315,112 @@ const Settings = () => {
                       </a>
                     )}
                   </div>
+                </Card>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <div>
+                  <h3 style={{ margin: 0 }}>Fornecedores & APIs Integradas</h3>
+                  <p className="text-secondary" style={{ margin: '4px 0 0', fontSize: '0.85rem' }}>
+                    Configure fornecedores nacionais, locais ou APIs externas adicionais.
+                  </p>
+                </div>
+                <Button 
+                  size="sm" 
+                  onClick={() => setShowAddSupplier(!showAddSupplier)}
+                  variant={showAddSupplier ? 'secondary' : 'primary'}
+                >
+                  {showAddSupplier ? 'Fechar' : '+ Cadastrar Nova API / Fornecedor'}
+                </Button>
+              </div>
+
+              {showAddSupplier && (
+                <Card style={{ marginBottom: '24px', border: '1px solid var(--accent-primary)' }}>
+                  <h4 style={{ margin: '0 0 12px', color: 'var(--text-primary)' }}>Adicionar Novo Fornecedor ou API</h4>
+                  <form onSubmit={handleCreateSupplier} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div className="form-grid">
+                      <Input 
+                        label="Nome do Fornecedor / Empresa" 
+                        placeholder="Ex: Fornecedor SP, CJ Dropshipping, Brás Moda..." 
+                        value={newSupplierName}
+                        onChange={(e) => setNewSupplierName(e.target.value)}
+                        required
+                      />
+                      <Input 
+                        label="Endpoint da API / URL Base (Opcional)" 
+                        placeholder="https://api.fornecedor.com.br/v1" 
+                        value={newSupplierEndpoint}
+                        onChange={(e) => setNewSupplierEndpoint(e.target.value)}
+                      />
+                    </div>
+                    <Input 
+                      label="API Key / Token de Acesso (Opcional)" 
+                      placeholder="Insira a chave de autenticação se houver" 
+                      type="password"
+                      value={newSupplierApiKey}
+                      onChange={(e) => setNewSupplierApiKey(e.target.value)}
+                    />
+                    <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '8px' }}>
+                      <Button type="button" variant="secondary" size="sm" onClick={() => setShowAddSupplier(false)}>Cancelar</Button>
+                      <Button size="sm" disabled={savingSupplier}>
+                        {savingSupplier ? 'Salvando...' : 'Salvar Fornecedor'}
+                      </Button>
+                    </div>
+                  </form>
+                </Card>
+              )}
+
+              <div className="connections-grid">
+                {/* Fornecedores customizados */}
+                {customSuppliers.map((s) => (
+                  <Card key={s.id} className="connection-card">
+                    <div className="conn-header">
+                      <div className="conn-brand" style={{ color: 'var(--accent-primary)', fontWeight: 600 }}>{s.name}</div>
+                      <div className="conn-status connected"><span className="dot"></span> Ativo</div>
+                    </div>
+                    <div className="conn-body">
+                      <p className="conn-desc">
+                        {s.config ? 'API Configurada para cotação e pedidos.' : 'Fornecedor cadastrado para compras e catalogação.'}
+                      </p>
+                    </div>
+                    <div className="conn-footer">
+                      <span className="last-sync">Pronto para uso</span>
+                      <Button variant="danger" size="sm" onClick={() => handleDeleteSupplier(s.id, s.name)}>Remover</Button>
+                    </div>
+                  </Card>
+                ))}
+
+                {/* AliExpress (Opcional) */}
+                <Card className="connection-card">
+                  <div className="conn-header">
+                    <div className="conn-brand aliexpress">AliExpress (Opcional)</div>
+                    <div className={`conn-status ${aliCred ? 'connected' : 'disconnected'}`}>
+                      <span className="dot"></span> {aliCred ? 'Conectado' : 'Desconectado'}
+                    </div>
+                  </div>
+                  <form onSubmit={handleSaveAli} className="conn-body">
+                    <Input 
+                      label="App Key" 
+                      placeholder={aliCred ? 'Configurado' : 'Insira sua App Key'} 
+                      value={aliKey}
+                      onChange={(e) => setAliKey(e.target.value)}
+                      required
+                    />
+                    <Input 
+                      label="App Secret" 
+                      placeholder={aliCred ? 'Configurado' : 'Insira seu App Secret'} 
+                      type="password"
+                      value={aliSecret}
+                      onChange={(e) => setAliSecret(e.target.value)}
+                      required
+                    />
+                    <div className="conn-footer" style={{ marginTop: '12px' }}>
+                      <span className="last-sync">{aliCred ? 'Ativo' : 'Opcional'}</span>
+                      <Button variant="primary" size="sm" disabled={savingAli}>
+                        {savingAli ? 'Salvando...' : aliCred ? 'Atualizar' : 'Salvar'}
+                      </Button>
+                    </div>
+                  </form>
                 </Card>
               </div>
             </div>
@@ -369,7 +505,7 @@ const Settings = () => {
                       required
                     />
                     <Input 
-                      label="Taxa de Câmbio USD para BRL" 
+                      label="Taxa de Câmbio USD para BRL (se importado)" 
                       type="number" 
                       step="0.01" 
                       value={usdRate}
@@ -455,7 +591,7 @@ const Settings = () => {
                     <div style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid var(--border)' }}>
                       <div style={{ color: '#10b981', fontWeight: 600, marginBottom: '4px' }}>🚚 Rastreios</div>
                       <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>A cada 30 minutos</div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>Busca código no AliExpress e envia para o comprador</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>Busca código no fornecedor e envia para o comprador</div>
                     </div>
 
                     <div style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid var(--border)' }}>

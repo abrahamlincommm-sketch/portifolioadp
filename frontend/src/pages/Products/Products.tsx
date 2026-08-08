@@ -26,14 +26,10 @@ interface ProductItem {
   lastSyncAt?: string;
 }
 
-const SUPPLIERS = [
-  { value: 'ALIEXPRESS', label: 'AliExpress', type: 'API', color: '#e43225' },
-  { value: 'MANUAL', label: 'Fornecedor Manual', type: 'MANUAL', color: '#7c3aed' },
-];
-
 const Products = () => {
   const { openModal, closeModal } = useUIStore();
   const [products, setProducts] = useState<ProductItem[]>([]);
+  const [suppliersList, setSuppliersList] = useState<{ value: string; label: string; color: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [syncingId, setSyncingId] = useState<string | null>(null);
@@ -63,6 +59,7 @@ const Products = () => {
 
   useEffect(() => {
     fetchProducts();
+    fetchSuppliers();
   }, []);
 
   const fetchProducts = async () => {
@@ -74,6 +71,24 @@ const Products = () => {
       console.error('Erro ao buscar produtos:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSuppliers = async () => {
+    try {
+      const res = await client.get('/suppliers');
+      const dbSupps = res.data?.dbSuppliers || [];
+      const list = [
+        { value: 'MANUAL', label: 'Fornecedor Nacional / Link', color: '#7c3aed' },
+        ...dbSupps.map((s: any) => ({
+          value: s.name.toUpperCase(),
+          label: s.name,
+          color: s.name.toUpperCase() === 'ALIEXPRESS' ? '#e43225' : '#2563eb'
+        }))
+      ];
+      setSuppliersList(list);
+    } catch {
+      setSuppliersList([{ value: 'MANUAL', label: 'Fornecedor Nacional / Link', color: '#7c3aed' }]);
     }
   };
 
@@ -160,7 +175,7 @@ const Products = () => {
     try {
       await client.post('/products/manual', {
         title: manualForm.title,
-        supplierName: manualForm.supplierName || 'MANUAL',
+        supplierName: manualForm.supplierName || 'FORNECEDOR_NACIONAL',
         supplierUrl: manualForm.supplierUrl,
         costPriceBrl: Number(manualForm.costPriceBrl) || 0,
         margin: Number(manualForm.margin) || 50,
@@ -262,11 +277,10 @@ const Products = () => {
       <div className="page-header">
         <div>
           <h2>Gerenciar Produtos</h2>
-          <p className="subtitle">Importe direto do link do fornecedor com proteção automática de margem de lucro</p>
+          <p className="subtitle">Cadastre produtos com link de fornecedores nacionais ou importe via API</p>
         </div>
         <div className="header-actions">
           <Button
-            variant="secondary"
             leftIcon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>}
             onClick={() => {
               setImportMode('manual');
@@ -275,9 +289,10 @@ const Products = () => {
               openModal('add-product');
             }}
           >
-            Cadastro com Link / Manual
+            + Cadastrar com Link / Fornecedor
           </Button>
           <Button
+            variant="secondary"
             leftIcon={<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>}
             onClick={() => {
               setImportMode('api');
@@ -285,7 +300,7 @@ const Products = () => {
               openModal('add-product');
             }}
           >
-            Importar via API (AliExpress)
+            Importar via API
           </Button>
         </div>
       </div>
@@ -306,8 +321,9 @@ const Products = () => {
         </select>
         <select className="ui-select" value={supplierFilter} onChange={(e) => setSupplierFilter(e.target.value)}>
           <option value="all">Fornecedor: Todos</option>
-          <option value="ALIEXPRESS">AliExpress</option>
-          <option value="MANUAL">Manual / Outros</option>
+          {suppliersList.map(s => (
+            <option key={s.value} value={s.value}>{s.label}</option>
+          ))}
         </select>
       </Card>
 
@@ -318,7 +334,7 @@ const Products = () => {
       ) : filteredProducts.length > 0 ? (
         <div className="products-grid">
           {filteredProducts.map(prod => {
-            const supplier = SUPPLIERS.find(s => s.value === prod.supplierName) || { label: prod.supplierName, color: '#7c3aed' };
+            const supplier = suppliersList.find(s => s.value === prod.supplierName) || { label: prod.supplierName, color: '#7c3aed' };
             return (
               <Card key={prod.id} className="product-card">
                 <div className="product-image-wrap">
@@ -409,14 +425,14 @@ const Products = () => {
             </div>
             <h3 style={{ margin: 0 }}>Nenhum produto cadastrado ainda</h3>
             <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: '0.9rem' }}>
-              Seu catálogo está vazio. Adicione seu primeiro produto puxando do link do fornecedor ou via cadastro manual.
+              Seu catálogo está pronto para começar. Adicione seus produtos puxando direto do link do seu fornecedor ou via cadastro manual.
             </p>
             <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
               <Button onClick={() => { setImportMode('manual'); openModal('add-product'); }}>
-                Cadastrar via Link / Manual
+                + Cadastrar com Link / Fornecedor
               </Button>
               <Button variant="secondary" onClick={() => { setImportMode('api'); openModal('add-product'); }}>
-                Importar via AliExpress
+                Importar via API
               </Button>
             </div>
           </div>
@@ -424,7 +440,7 @@ const Products = () => {
       )}
 
       {/* Modal: Add Product */}
-      <Modal id="add-product" title={importMode === 'api' ? 'Importar Produto via API' : 'Cadastro de Produto com Link / Manual'}>
+      <Modal id="add-product" title={importMode === 'api' ? 'Importar Produto via API' : 'Cadastro de Produto com Link / Fornecedor'}>
         <div className="import-modal-content">
           {errorMsg && (
             <div style={{ padding: '10px 14px', background: 'rgba(244, 63, 94, 0.15)', border: '1px solid rgba(244, 63, 94, 0.3)', borderRadius: '8px', color: '#f43f5e', fontSize: '0.85rem' }}>
@@ -441,9 +457,9 @@ const Products = () => {
           {importMode === 'api' ? (
             <form onSubmit={handleImportApi} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div className="supplier-selector">
-                <label className="field-label">Selecione o Fornecedor</label>
+                <label className="field-label">Selecione o Fornecedor Conectado</label>
                 <div className="supplier-options">
-                  {SUPPLIERS.filter(s => s.type === 'API').map(s => (
+                  {suppliersList.map(s => (
                     <button
                       type="button"
                       key={s.value}
@@ -459,8 +475,8 @@ const Products = () => {
               </div>
 
               <Input
-                label="URL ou ID do Produto no AliExpress"
-                placeholder="Ex: 10050012345678 ou https://pt.aliexpress.com/item/..."
+                label="URL ou ID do Produto na API"
+                placeholder="Cole o ID ou URL do produto..."
                 value={importUrl}
                 onChange={(e) => setImportUrl(e.target.value)}
                 required
@@ -482,7 +498,7 @@ const Products = () => {
                   <input
                     className="ui-input"
                     style={{ flex: 1 }}
-                    placeholder="Cole o link (AliExpress, Shopee, Shein, loja nacional...)"
+                    placeholder="Cole o link (Loja nacional, Shein, catálogo web...)"
                     value={manualForm.supplierUrl}
                     onChange={(e) => handleManualChange('supplierUrl', e.target.value)}
                   />
@@ -504,7 +520,7 @@ const Products = () => {
               <div className="form-row">
                 <Input
                   label="Nome do Fornecedor"
-                  placeholder="Ex: Fábrica SP, Shein, etc."
+                  placeholder="Ex: Confecção Brás, Distribuidora Sul, etc."
                   value={manualForm.supplierName}
                   onChange={(e) => handleManualChange('supplierName', e.target.value)}
                 />
@@ -578,14 +594,14 @@ const Products = () => {
               className={`mode-btn ${importMode === 'manual' ? 'active' : ''}`}
               onClick={() => { setImportMode('manual'); setErrorMsg(''); setScrapeSuccessMsg(''); }}
             >
-              ⚡ Puxar do Link / Manual
+              ⚡ Puxar do Link / Fornecedor Nacional
             </button>
             <button
               type="button"
               className={`mode-btn ${importMode === 'api' ? 'active' : ''}`}
               onClick={() => { setImportMode('api'); setErrorMsg(''); setScrapeSuccessMsg(''); }}
             >
-              🔗 Importar via API (AliExpress)
+              🔗 Importar via API
             </button>
           </div>
         </div>

@@ -13,6 +13,7 @@ interface CredentialStatus {
 const Sidebar = () => {
   const { sidebarCollapsed, toggleSidebar } = useUIStore();
   const [credentials, setCredentials] = useState<CredentialStatus[]>([]);
+  const [hasSuppliers, setHasSuppliers] = useState(true);
 
   useEffect(() => {
     fetchCredentials();
@@ -60,10 +61,6 @@ const Sidebar = () => {
 
       <div className="sidebar-footer">
         <div className="status-indicators">
-          <div className="indicator" title={isConnected('ALIEXPRESS') ? 'AliExpress Conectado' : 'AliExpress Não Conectado'}>
-            <span className={`dot ${isConnected('ALIEXPRESS') ? 'dot-green' : 'dot-red'}`}></span> 
-            {!sidebarCollapsed && 'AliExpress'}
-          </div>
           <div className="indicator" title={isConnected('MERCADOLIVRE') ? 'Mercado Livre Conectado' : 'Mercado Livre Não Conectado'}>
             <span className={`dot ${isConnected('MERCADOLIVRE') ? 'dot-green' : 'dot-red'}`}></span> 
             {!sidebarCollapsed && 'Mercado Livre'}
@@ -71,6 +68,10 @@ const Sidebar = () => {
           <div className="indicator" title={isConnected('SHOPEE') ? 'Shopee Conectado' : 'Shopee Não Conectado'}>
             <span className={`dot ${isConnected('SHOPEE') ? 'dot-green' : 'dot-red'}`}></span> 
             {!sidebarCollapsed && 'Shopee'}
+          </div>
+          <div className="indicator" title="Fornecedores / Hub Nacional">
+            <span className={`dot ${hasSuppliers ? 'dot-green' : 'dot-red'}`}></span> 
+            {!sidebarCollapsed && 'Fornecedores'}
           </div>
         </div>
         
