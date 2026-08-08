@@ -24,6 +24,8 @@ app.use(cors({
     env.FRONTEND_URL,
     'https://allydigitalpartners.com',
     'https://www.allydigitalpartners.com',
+    'https://allydigitalpartners.netlify.app',
+    'http://localhost:5173',
   ].filter(Boolean),
   credentials: true,
 }));
