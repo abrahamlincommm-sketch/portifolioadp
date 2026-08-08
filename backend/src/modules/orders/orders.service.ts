@@ -5,7 +5,11 @@ const prisma = new PrismaClient();
 
 export class OrdersService {
   async listOrders(userId: string) {
-    return prisma.order.findMany({ where: { userId } });
+    return prisma.order.findMany({
+      where: { userId },
+      include: { product: true },
+      orderBy: { createdAt: 'desc' }
+    });
   }
 
   async getOrder(userId: string, id: string) {
@@ -15,7 +19,13 @@ export class OrdersService {
   async getStats(userId: string) {
     const total = await prisma.order.count({ where: { userId } });
     const pending = await prisma.order.count({ where: { userId, status: 'PENDING' } });
-    return { total, pending };
+    const processing = await prisma.order.count({
+      where: { userId, status: { in: ['FULFILLMENT_PENDING', 'PLACED_ON_AE', 'AWAITING_TRACKING'] } }
+    });
+    const completed = await prisma.order.count({
+      where: { userId, status: { in: ['TRACKING_SYNCED', 'DELIVERED'] } }
+    });
+    return { total, pending, processing, completed };
   }
 
   async fulfillOrder(userId: string, id: string) {

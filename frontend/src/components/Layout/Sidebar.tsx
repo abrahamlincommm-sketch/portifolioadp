@@ -1,10 +1,35 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useUIStore } from '../../store/uiStore';
+import client from '../../api/client';
 import './Sidebar.css';
+
+interface CredentialStatus {
+  platform: string;
+  hasAccessToken?: boolean;
+  appKey?: string;
+}
 
 const Sidebar = () => {
   const { sidebarCollapsed, toggleSidebar } = useUIStore();
+  const [credentials, setCredentials] = useState<CredentialStatus[]>([]);
+
+  useEffect(() => {
+    fetchCredentials();
+  }, []);
+
+  const fetchCredentials = async () => {
+    try {
+      const res = await client.get('/auth/credentials');
+      setCredentials(res.data || []);
+    } catch {
+      // Ignorar se falhar
+    }
+  };
+
+  const isConnected = (platform: string) => {
+    return credentials.some(c => c.platform.toUpperCase() === platform.toUpperCase());
+  };
 
   const navItems = [
     { path: '/', label: 'Dashboard', icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg> },
@@ -35,9 +60,18 @@ const Sidebar = () => {
 
       <div className="sidebar-footer">
         <div className="status-indicators">
-          <div className="indicator" title="AliExpress Conectado"><span className="dot dot-green"></span> {!sidebarCollapsed && 'AliExpress'}</div>
-          <div className="indicator" title="Mercado Livre Conectado"><span className="dot dot-green"></span> {!sidebarCollapsed && 'Mercado Livre'}</div>
-          <div className="indicator" title="Shopee Pendente"><span className="dot dot-yellow"></span> {!sidebarCollapsed && 'Shopee'}</div>
+          <div className="indicator" title={isConnected('ALIEXPRESS') ? 'AliExpress Conectado' : 'AliExpress Não Conectado'}>
+            <span className={`dot ${isConnected('ALIEXPRESS') ? 'dot-green' : 'dot-red'}`}></span> 
+            {!sidebarCollapsed && 'AliExpress'}
+          </div>
+          <div className="indicator" title={isConnected('MERCADOLIVRE') ? 'Mercado Livre Conectado' : 'Mercado Livre Não Conectado'}>
+            <span className={`dot ${isConnected('MERCADOLIVRE') ? 'dot-green' : 'dot-red'}`}></span> 
+            {!sidebarCollapsed && 'Mercado Livre'}
+          </div>
+          <div className="indicator" title={isConnected('SHOPEE') ? 'Shopee Conectado' : 'Shopee Não Conectado'}>
+            <span className={`dot ${isConnected('SHOPEE') ? 'dot-green' : 'dot-red'}`}></span> 
+            {!sidebarCollapsed && 'Shopee'}
+          </div>
         </div>
         
         <button className="collapse-btn" onClick={toggleSidebar}>
