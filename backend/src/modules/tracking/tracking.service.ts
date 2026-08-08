@@ -1,30 +1,47 @@
 import { PrismaClient } from '@prisma/client';
-import { AliExpressClient } from '../aliexpress/aliexpress.client.js';
+import { SupplierRegistry } from '../suppliers/supplier.registry.js';
 
 const prisma = new PrismaClient();
 
 export class TrackingService {
   async syncTracking() {
     const orders = await prisma.order.findMany({
-      where: { status: 'AWAITING_TRACKING', aliexpressOrderId: { not: null } },
-      include: { user: { include: { credentials: { where: { platform: 'ALIEXPRESS' } } } } }
+      where: { status: 'AWAITING_TRACKING', supplierOrderId: { not: null } },
+      include: {
+        product: true,
+        user: { include: { credentials: true } }
+      }
     });
 
     for (const order of orders) {
       try {
-        const cred = order.user.credentials[0];
+        const supplierName = order.supplierName || 'ALIEXPRESS';
+        const adapter = SupplierRegistry.get(supplierName);
+
+        if (!adapter) {
+          console.warn(`No adapter found for supplier: ${supplierName}`);
+          continue;
+        }
+
+        // For manual suppliers, skip tracking sync
+        if (adapter.type === 'MANUAL') continue;
+
+        // Get credentials for this supplier
+        const cred = order.user.credentials.find(c => c.platform === supplierName);
         if (!cred) continue;
 
-        const client = new AliExpressClient(cred.appKey!, cred.appSecret!);
-        const trackingInfo = await client.getTrackingInfo(order.aliexpressOrderId!);
+        const trackingResult = await adapter.getTracking(
+          order.supplierOrderId!,
+          { appKey: cred.appKey, appSecret: cred.appSecret }
+        );
 
-        if (trackingInfo && trackingInfo.tracking_number) {
+        if (trackingResult && trackingResult.trackingCode) {
           await prisma.order.update({
             where: { id: order.id },
-            data: { 
-              status: 'TRACKING_SYNCED', 
-              trackingCode: trackingInfo.tracking_number,
-              trackingUrl: trackingInfo.tracking_url 
+            data: {
+              status: 'TRACKING_SYNCED',
+              trackingCode: trackingResult.trackingCode,
+              trackingUrl: trackingResult.trackingUrl
             }
           });
 
@@ -33,7 +50,7 @@ export class TrackingService {
               type: 'TRACKING_SYNC',
               entityId: order.id,
               platform: order.platform,
-              message: `Tracking synced: ${trackingInfo.tracking_number}`,
+              message: `Tracking synced: ${trackingResult.trackingCode}`,
               status: 'SUCCESS'
             }
           });

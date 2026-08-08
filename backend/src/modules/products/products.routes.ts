@@ -18,7 +18,14 @@ router.get('/:id', async (req: any, res) => {
 });
 
 router.post('/import', async (req: any, res) => {
-  const product = await productsService.importProduct(req.userId, req.body.productId);
+  const { supplierName, productId } = req.body;
+  const product = await productsService.importProduct(req.userId, supplierName, productId);
+  res.json(product);
+});
+
+router.post('/manual', async (req: any, res) => {
+  const { supplierName, ...productData } = req.body;
+  const product = await productsService.createManualProduct(req.userId, supplierName, productData);
   res.json(product);
 });
 

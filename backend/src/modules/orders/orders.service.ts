@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { AliExpressClient } from '../aliexpress/aliexpress.client.js';
+import { SupplierRegistry } from '../suppliers/supplier.registry.js';
 
 const prisma = new PrismaClient();
 
@@ -9,7 +9,7 @@ export class OrdersService {
   }
 
   async getOrder(userId: string, id: string) {
-    return prisma.order.findFirst({ where: { id, userId } });
+    return prisma.order.findFirst({ where: { id, userId }, include: { product: true } });
   }
 
   async getStats(userId: string) {
@@ -22,16 +22,29 @@ export class OrdersService {
     const order = await prisma.order.findFirst({ where: { id, userId }, include: { product: true } });
     if (!order) throw new Error('Order not found');
 
-    const cred = await prisma.credential.findFirst({ where: { userId, platform: 'ALIEXPRESS' } });
-    if (!cred) throw new Error('AliExpress credentials not found');
+    const supplierName = order.product.supplierName;
+    const adapter = SupplierRegistry.get(supplierName);
+    
+    if (!adapter) {
+      throw new Error(`Supplier adapter not found: ${supplierName}`);
+    }
 
-    const client = new AliExpressClient(cred.appKey!, cred.appSecret!);
-    // Mock call to create order
-    // const aeOrder = await client.createOrder({...});
+    const cred = await prisma.credential.findFirst({ where: { userId, platform: supplierName.toUpperCase() } });
+    
+    const result = await adapter.createOrder({
+      supplierProductId: order.product.supplierProductId,
+      quantity: order.quantity,
+      buyerName: order.buyerName,
+      buyerAddress: order.buyerAddress,
+    }, cred || {});
 
     return prisma.order.update({
       where: { id },
-      data: { status: 'PLACED_ON_AE', aliexpressOrderId: 'AE123456789' }
+      data: { 
+        status: result.status, 
+        supplierOrderId: result.supplierOrderId,
+        supplierName: supplierName.toUpperCase()
+      }
     });
   }
 }

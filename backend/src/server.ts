@@ -13,6 +13,8 @@ import productsRoutes from './modules/products/products.routes.js';
 import ordersRoutes from './modules/orders/orders.routes.js';
 import webhooksRoutes from './modules/webhooks/webhooks.routes.js';
 import dashboardRoutes from './modules/dashboard/dashboard.routes.js';
+import suppliersRoutes from './modules/suppliers/suppliers.routes.js';
+import { SupplierRegistry } from './modules/suppliers/supplier.registry.js';
 
 const app = express();
 
@@ -41,6 +43,7 @@ app.use('/api/products', productsRoutes);
 app.use('/api/orders', ordersRoutes);
 app.use('/api/webhooks', webhooksRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/suppliers', suppliersRoutes);
 
 app.use(errorHandler);
 
@@ -48,5 +51,6 @@ const PORT = Number(env.PORT || 3000);
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
+  SupplierRegistry.initialize();
   setupScheduler();
 });

@@ -35,28 +35,43 @@ model Credential {
   updatedAt    DateTime  @updatedAt
 }
 
+model Supplier {
+  id           String    @id @default(uuid())
+  name         String    @unique
+  type         String    // 'API' or 'MANUAL'
+  apiEndpoint  String?
+  isActive     Boolean   @default(true)
+  config       String?   // JSON string
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  products     Product[]
+}
+
 model Product {
-  id                  String   @id @default(uuid())
-  aliexpressProductId String
-  aliexpressUrl       String?
+  id                  String    @id @default(uuid())
+  supplierProductId   String
+  supplierUrl         String?
+  supplierName        String    @default("ALIEXPRESS")
+  supplier            Supplier? @relation(fields: [supplierId], references: [id])
+  supplierId          String?
   title               String
   titlePtBr           String?
   description         String?
   descriptionPtBr     String?
-  images              String   // JSON string array
+  images              String    // JSON string array
   costPriceUsd        Float
   costPriceBrl        Float
-  margin              Float    @default(50)
+  margin              Float     @default(50)
   salePriceBrl        Float
   stock               Int
   mlItemId            String?
   shopeeItemId        String?
-  status              String   // DRAFT | ACTIVE | PAUSED | ERROR
+  status              String    // DRAFT | ACTIVE | PAUSED | ERROR
   lastSyncAt          DateTime?
-  user                User     @relation(fields: [userId], references: [id])
+  user                User      @relation(fields: [userId], references: [id])
   userId              String
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
   Order               Order[]
 }
 
@@ -64,7 +79,8 @@ model Order {
   id                String   @id @default(uuid())
   platform          String   // MERCADOLIVRE | SHOPEE
   platformOrderId   String
-  aliexpressOrderId String?
+  supplierOrderId   String?
+  supplierName      String   @default("ALIEXPRESS")
   buyerName         String
   buyerAddress      String   // JSON string
   buyerTaxId        String?
